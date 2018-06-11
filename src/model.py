@@ -1,0 +1,143 @@
+# -*- coding: utf-8 -*-
+# @Time    : 6/8/18 17:21
+# @Author  : Lucien Cho
+# @File    : model.py
+# @Software: PyCharm
+# @Contact : luciencho@aliyun.com
+
+from __future__ import print_function
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
+
+import numpy as np
+import tensorflow as tf
+
+
+class GraderBase(object):
+    rnn_cell = 'lstm'
+    hidden = 128
+    keep_prob = 0.8
+    num_layers = 1
+    vocab_size = 2 ** 15
+    emb_dim = 32
+    learning_rate = 0.01
+    max_iter = 100000
+    show_iter = 10
+    save_iter = 1000
+    batch_size = 32
+    x_max_len = 128
+    y_max_len = 32
+
+
+class GraderModel(object):
+    def __init__(self, hparam):
+        self.hparam = hparam
+        self.global_step = tf.Variable(0, trainable=False)
+        self.keep_prob = None
+        self.question = None
+        self.question_len = None
+        self.answer = None
+        self.answer_len = None
+        self.labels = None
+        self.embedding = None
+        self.emb_question = None
+        self.emb_answer = None
+        self.question_state = None
+        self.answer_state = None
+        self.mean_loss = None
+        self.opt = None
+        self.optOp = None
+        self.init = None
+        self.body()
+
+    def body(self):
+
+        def create_rnn_cell():
+            if self.hparam.rnn_cell.lower() == 'lstm':
+                cell = tf.contrib.rnn.LSTMCell(self.hparam.hidden)
+            elif self.hparam.rnn_cell.lower() == 'gru':
+                cell = tf.contrib.rnn.GRUCell(self.hparam.hidden)
+            else:
+                cell = tf.contrib.rnn.RNNCell(self.hparam.hidden)
+            cell = tf.contrib.rnn.DropoutWrapper(
+                cell, output_keep_prob=self.keep_prob)
+            return cell
+
+        self.keep_prob = tf.placeholder(dtype=tf.float32, shape=None, name='keep_prob')
+        encoder_cell = tf.contrib.rnn.MultiRNNCell(
+            [create_rnn_cell() for _ in range(self.hparam.num_layers)], state_is_tuple=True)
+
+        with tf.variable_scope('question'):
+            self.question = tf.placeholder(tf.int32, [None, None], name='question')
+            self.question_len = tf.cast(
+                tf.reduce_sum(tf.sign(self.question), axis=-1), dtype=tf.int32)
+
+        with tf.variable_scope('answer'):
+            self.answer = tf.placeholder(tf.int32, [None, None], name='answer')
+            self.answer_len = tf.cast(
+                tf.reduce_sum(tf.sign(self.answer), axis=-1), dtype=tf.int32)
+
+        with tf.variable_scope('labels'):
+            self.labels = tf.placeholder(tf.int32, [None, None], name='labels')
+
+        with tf.variable_scope('embedding'), tf.device('/cpu:0'):
+            self.embedding = tf.get_variable(
+                'embedding', [self.hparam.vocab_size, self.hparam.emb_dim],
+                initializer=tf.contrib.layers.xavier_initializer())
+            self.emb_question = tf.nn.embedding_lookup(self.embedding, self.question)
+            self.emb_answer = tf.nn.embedding_lookup(self.embedding, self.answer)
+            self.emb_question = tf.nn.dropout(
+                self.emb_question, keep_prob=self.keep_prob)
+            self.emb_answer = tf.nn.dropout(
+                self.emb_answer, keep_prob=self.keep_prob)
+
+        with tf.variable_scope('rnn'):
+            question_output, question_final_state = tf.nn.dynamic_rnn(
+                cell=encoder_cell, inputs=self.emb_question,
+                sequence_length=self.question_len, time_major=False, dtype=tf.float32)
+
+            answer_output, answer_final_state = tf.nn.dynamic_rnn(
+                cell=encoder_cell, inputs=self.emb_answer,
+                sequence_length=self.answer_len, time_major=False, dtype=tf.float32)
+
+        with tf.variable_scope('linear'):
+            w = tf.get_variable('linear_w', [self.hparam.hidden, self.hparam.hidden],
+                                initializer=tf.contrib.layers.xavier_initializer())
+
+        answer_final_state = tf.matmul(answer_final_state[-1].h, w)
+        self.question_state = question_final_state
+        self.answer_state = answer_final_state
+        logits = tf.matmul(
+            question_final_state[-1].h, answer_final_state, transpose_b=True)
+        losses = tf.losses.softmax_cross_entropy(self.labels, logits)
+        self.mean_loss = tf.reduce_mean(losses, name='mean_loss')
+
+        self.opt = tf.contrib.opt.LazyAdamOptimizer(learning_rate=self.hparam.learning_rate)
+        grads_vars = self.opt.compute_gradients(self.mean_loss)
+        capped_grads_vars = [[tf.clip_by_value(g, -0.5, 0.5), v] for g, v in grads_vars]
+        self.optOp = self.opt.apply_gradients(capped_grads_vars, self.global_step)
+
+    def step(self, batch, is_train=True):
+        question = batch.question()
+        answer = batch.answer()
+        feed_dict = {self.question: question,
+                     self.answer: answer,
+                     self.labels: np.eye(batch.size),
+                     self.keep_prob: self.hparam.keep_prob}
+        if is_train:
+            fetches = [self.optOp, self.mean_loss]
+        else:
+            feed_dict[self.keep_prob] = 1.0
+            fetches = [self.question_state, self.answer_state, self.mean_loss]
+        return fetches, feed_dict
+
+    def infer(self, question_toks):
+        feed_dict = {self.question: [question_toks],
+                     self.keep_prob: 1.0}
+        fetches = [self.question_state]
+        return fetches, feed_dict
+
+
+if __name__ == '__main__':
+    model = GraderModel(GraderBase())

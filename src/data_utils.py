@@ -13,10 +13,22 @@ from __future__ import unicode_literals
 import os
 import re
 import codecs
-import tqdm
 import math
 import jieba_fast as jieba
-from src.data import tmp_dir
+
+
+def add_dir_to_hparam(hparam, tmp_dir, data_dir=None):
+    hparam.vocab_path = os.path.join(tmp_dir, 'train_q.vcb')
+    hparam.train_question_path = os.path.join(tmp_dir, 'train_q.txt')
+    hparam.train_answer_path = os.path.join(tmp_dir, 'train_a.txt')
+    hparam.dev_question_path = os.path.join(tmp_dir, 'dev_q.txt')
+    hparam.dev_answer_path = os.path.join(tmp_dir, 'dev_a.txt')
+    hparam.model_path = os.path.join(tmp_dir, 'model.ckpt')
+    hparam.vec_path = os.path.join(tmp_dir, 'result.vec.npz')
+    hparam.ann_path = os.path.join(tmp_dir, 'question_vecs.ann')
+    if data_dir is not None:
+        hparam.chat_file = os.path.join(data_dir, 'preliminaryData', 'chat.txt')
+    return hparam
 
 
 _substitution = [
@@ -43,35 +55,13 @@ _substitution = [
     (re.compile(r'\d{11}'), '_PHON_'),
     (re.compile(r'\d{11,15}'), '_NUMB_'),
 ]
-_copy_head = ['PAD', 'UNK', 'GO', 'EOS']
+copy_head = ['PAD', 'UNK', 'GO', 'EOS']
 
 
 def clean_line(line):
     for regex, subs in _substitution:
         line = regex.sub(subs, line)
     return line.strip()
-
-
-def build_vocab(in_file, out_file, max_vocab_size=None):
-    dictionary = dict()
-    with codecs.open(in_file, 'r', 'utf-8') as f_in:
-        for line in tqdm.tqdm(f_in):
-            words = sent2words(line)
-            for word in words:
-                if word in dictionary:
-                    dictionary[word] += 1
-                else:
-                    dictionary[word] = 1
-    vocab_size = len(dictionary.values())
-    print("{} words are in file: {}".format(vocab_size, in_file))
-    words = sorted(dictionary, key=dictionary.get, reverse=True)
-    if max_vocab_size is not None:
-        if max_vocab_size - 4 < vocab_size:
-            words = words[: max_vocab_size - 4]
-    words = _copy_head + words
-    print("Total vocabulary size: {}".format(len(words)))
-    with codecs.open(out_file, 'w', 'utf-8') as f_out:
-        f_out.write('\n'.join(words))
 
 
 def sent2words(line):
@@ -145,9 +135,4 @@ def cosine_similarity(v1, v2):
         sum_xx += x * x
         sum_yy += y * y
         sum_xy += x * y
-    return sum_xy / math.sqrt(sum_xx * sum_yy)
-
-
-if __name__ == '__main__':
-    build_vocab(os.path.join(tmp_dir, 'train_q.txt'),
-                os.path.join(tmp_dir, 'train_q.vcb'), max_vocab_size=2 ** 15)
+    return sum_xy / math.sqrt(sum_xx * sum_yy)\

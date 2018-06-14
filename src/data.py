@@ -12,18 +12,14 @@ from __future__ import unicode_literals
 
 import os
 import re
-import codecs
 import random
-
-
-dataset_dir = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'dataset')
-tmp_dir = os.path.join(dataset_dir, 'tmp')
+import tqdm
+from src.data_utils import sent2words, copy_head
 
 
 def build_dialogues(chat_file):
     dialogues = []
-    with codecs.open(chat_file, 'r', 'utf-8') as f:
+    with open(chat_file, 'r', encoding='utf-8') as f:
         chat_data = f.read().split('\n')[1:]
         first_line = chat_data[0]
         words = first_line.strip().split('\t')
@@ -63,8 +59,8 @@ def build_qa(dialogues, directory, prefix='train', mode='qaqaq'):
     q_path = os.path.join(directory, prefix + '_q.txt')
     a_path = os.path.join(directory, prefix + '_a.txt')
     counter = 0
-    with codecs.open(q_path, 'w', 'utf-8') as fq:
-        with codecs.open(a_path, 'w', 'utf-8') as fa:
+    with open(q_path, 'w', encoding='utf-8') as fq:
+        with open(a_path, 'w', encoding='utf-8') as fa:
             for dial in dialogues:
                 content, sent_by = zip(*dial)
                 full = ''.join(sent_by)
@@ -78,15 +74,34 @@ def build_qa(dialogues, directory, prefix='train', mode='qaqaq'):
                         print('store {} lines for {} set'.format(counter, prefix))
 
 
-def main():
-    if not os.path.exists(tmp_dir):
-        os.makedirs(tmp_dir)
-    chat_file = os.path.join(dataset_dir, 'preliminaryData', 'chat.txt')
+def build_vocab(in_file, out_file, max_vocab_size=None):
+    dictionary = dict()
+    with open(in_file, 'r', encoding='utf-8') as f_in:
+        for line in tqdm.tqdm(f_in):
+            words = sent2words(line)
+            for word in words:
+                if word in dictionary:
+                    dictionary[word] += 1
+                else:
+                    dictionary[word] = 1
+    vocab_size = len(dictionary.values())
+    print("{} words are in file: {}".format(vocab_size, in_file))
+    words = sorted(dictionary, key=dictionary.get, reverse=True)
+    if max_vocab_size is not None:
+        if max_vocab_size - 4 < vocab_size:
+            words = words[: max_vocab_size - 4]
+    words = copy_head + words
+    print("Total vocabulary size: {}".format(len(words)))
+    with open(out_file, 'w', encoding='utf-8') as f_out:
+        f_out.write('\n'.join(words))
+
+
+def main(hparam):
+    if not os.path.exists(hparam.tmp_dir):
+        os.makedirs(hparam.tmp_dir)
+    chat_file = os.path.join(hparam.data_dir, 'preliminaryData', 'chat.txt')
     dialogues = build_dialogues(chat_file)
     train_dialogues, dev_dialogues = split_dialogues(dialogues, 10)
-    build_qa(train_dialogues, tmp_dir, 'train', 'qaqaq')
-    build_qa(dev_dialogues, tmp_dir, 'dev', 'qaqaq')
-
-
-if __name__ == '__main__':
-    main()
+    build_qa(train_dialogues, hparam.tmp_dir, 'train', 'qaqaq')
+    build_qa(dev_dialogues, hparam.tmp_dir, 'dev', 'qaqaq')
+    build_vocab(hparam.train_question_path, hparam.vocab_path, hparam.vocab_size)

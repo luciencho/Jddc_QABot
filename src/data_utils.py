@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # @Time    : 6/8/18 01:51
 # @Author  : Lucien Cho
-# @File    : prepro.py
+# @File    : data_utils.py
 # @Software: PyCharm
 # @Contact : luciencho@aliyun.com
 
@@ -12,12 +12,12 @@ from __future__ import unicode_literals
 
 import os
 import re
-import codecs
 import math
 import jieba_fast as jieba
 
 
 def add_dir_to_hparam(hparam, tmp_dir, data_dir=None):
+    hparam.tmp_dir = tmp_dir
     hparam.vocab_path = os.path.join(tmp_dir, 'train_q.vcb')
     hparam.train_question_path = os.path.join(tmp_dir, 'train_q.txt')
     hparam.train_answer_path = os.path.join(tmp_dir, 'train_a.txt')
@@ -27,6 +27,7 @@ def add_dir_to_hparam(hparam, tmp_dir, data_dir=None):
     hparam.vec_path = os.path.join(tmp_dir, 'result.vec.npz')
     hparam.ann_path = os.path.join(tmp_dir, 'question_vecs.ann')
     if data_dir is not None:
+        hparam.data_dir = data_dir
         hparam.chat_file = os.path.join(data_dir, 'preliminaryData', 'chat.txt')
     return hparam
 
@@ -79,7 +80,7 @@ def tokenizer(line, word2id, max_len=None):
 
 
 def load_vocab(path):
-    with codecs.open(path, 'r', 'utf-8') as f:
+    with open(path, 'r', encoding='utf-8') as f:
         vocab = f.read().split('\n')
     word2id = {w: n for n, w in enumerate(vocab)}
     id2word = {n: w for n, w in enumerate(vocab)}
@@ -87,7 +88,7 @@ def load_vocab(path):
 
 
 def load_data(path):
-    with codecs.open(path, 'r', 'utf-8') as f:
+    with open(path, 'r', encoding='utf-8') as f:
         return f.read().split('\n')
 
 

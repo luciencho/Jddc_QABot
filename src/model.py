@@ -14,23 +14,19 @@ import numpy as np
 import tensorflow as tf
 
 
-class GraderBase(object):
-    rnn_cell = 'lstm'
-    hidden = 128
-    keep_prob = 0.8
-    num_layers = 1
-    vocab_size = 2 ** 15
-    emb_dim = 32
-    learning_rate = 0.01
-    max_iter = 100000
-    show_iter = 10
-    save_iter = 1000
-    batch_size = 32
-    x_max_len = 128
-    y_max_len = 32
+class ModelTemplate(object):
+    def __init__(self, hparam):
+        self.hparam = hparam
+        self.global_step = tf.Variable(0, trainable=False)
+
+    def body(self):
+        raise NotImplementedError()
+
+    def step(self, is_train):
+        raise NotImplementedError()
 
 
-class GraderModel(object):
+class SoloModel(ModelTemplate):
     def __init__(self, hparam):
         self.hparam = hparam
         self.global_step = tf.Variable(0, trainable=False)
@@ -50,6 +46,7 @@ class GraderModel(object):
         self.optOp = None
         self.init = None
         self.body()
+        super(SoloModel, self).__init__(hparam)
 
     def body(self):
 
@@ -139,5 +136,17 @@ class GraderModel(object):
         return fetches, feed_dict
 
 
-if __name__ == '__main__':
-    model = GraderModel(GraderBase())
+class SoloBase(object):
+    rnn_cell = 'lstm'
+    hidden = 128
+    keep_prob = 0.8
+    num_layers = 1
+    vocab_size = 2 ** 15
+    emb_dim = 32
+    learning_rate = 0.01
+    max_iter = 200
+    show_iter = 10
+    save_iter = 100
+    batch_size = 32
+    x_max_len = 128
+    y_max_len = 32

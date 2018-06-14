@@ -88,7 +88,7 @@ def build_vector(hparam, model, sess):
             1 if total_size % hparam.batch_size != 0 else 0)):
         if i % hparam.show_iter == 0 and i:
             speed = hparam.show_iter / (time() - starter)
-            print('step : {:05d} | speed: {:.5f}'.format(i, speed))
+            print('step : {:05d} | speed: {:.5f} it/s'.format(i, speed))
             starter = time()
         train_fetch, train_feed_dict = model.step(train_batch, is_train=False)
         q, a, lo = sess.run(train_fetch, feed_dict=train_feed_dict)

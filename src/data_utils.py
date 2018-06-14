@@ -13,6 +13,7 @@ from __future__ import unicode_literals
 import os
 import re
 import math
+import random
 import jieba_fast as jieba
 
 
@@ -100,6 +101,7 @@ def iter_batch(lines, batch_size, word2id, max_len=None):
         end = start % size + batch_size
         if end > size:
             curr = lines[start:] + lines[: end - size]
+            random.shuffle(lines)
         else:
             curr = lines[start: end]
         curr = [tokenizer(l, word2id, max_len) for l in curr]
@@ -110,7 +112,7 @@ def iter_batch(lines, batch_size, word2id, max_len=None):
 
 class Batch(object):
     def __init__(self, batch_size, x_max_len, y_max_len,
-                 x, y, word2id, reverse_x=True):
+                 x, y, word2id, reverse_x=False):
         assert len(x) == len(y)
         print('data size: {}'.format(len(x)))
         self.size = batch_size
@@ -118,8 +120,10 @@ class Batch(object):
         self.y_max_len = y_max_len
         if reverse_x:
             x = [i[:: -1] for i in x]
-        self.x_iter = iter_batch(x, batch_size, word2id, x_max_len)
-        self.y_iter = iter_batch(x, batch_size, word2id, y_max_len)
+        self.x = x
+        self.y = y
+        self.x_iter = iter_batch(self.x, batch_size, word2id, x_max_len)
+        self.y_iter = iter_batch(self.y, batch_size, word2id, y_max_len)
 
     def question(self):
         return next(self.x_iter)

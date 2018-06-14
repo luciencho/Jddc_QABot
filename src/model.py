@@ -100,7 +100,7 @@ class SoloModel(ModelTemplate):
 
         with tf.variable_scope('linear'):
             w = tf.get_variable('linear_w', [self.hparam.hidden, self.hparam.hidden],
-                                initializer=tf.contrib.layers.xavier_initializer())
+                                initializer=tf.truncated_normal_initializer())
 
         answer_final_state = tf.matmul(answer_final_state[-1].h, w)
         self.question_state = question_final_state
@@ -142,11 +142,11 @@ class SoloBase(object):
     keep_prob = 0.8
     num_layers = 1
     vocab_size = 2 ** 15
-    emb_dim = 32
-    learning_rate = 0.01
-    max_iter = 200
-    show_iter = 10
-    save_iter = 100
-    batch_size = 32
+    emb_dim = 128
+    learning_rate = 0.005  # 4.24839
+    max_iter = 5000
+    show_iter = 100
+    save_iter = 500
+    batch_size = 128
     x_max_len = 128
     y_max_len = 32

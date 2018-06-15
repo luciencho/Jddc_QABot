@@ -172,7 +172,5 @@ class SoloBase(object):  # 4.23
     direction = 'mono'
 
 
-class SoloBiBase(SoloBase):  # 4.15
+class SoloBiBase(SoloBase):  # 3.75
     direction = 'bi'
-    num_layers = 2
-    learning_rate = 0.003

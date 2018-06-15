@@ -22,7 +22,7 @@ class ModelTemplate(object):
     def body(self):
         raise NotImplementedError()
 
-    def step(self, is_train):
+    def step(self, batch, is_train):
         raise NotImplementedError()
 
 
@@ -62,8 +62,6 @@ class SoloModel(ModelTemplate):
             return cell
 
         self.keep_prob = tf.placeholder(dtype=tf.float32, shape=None, name='keep_prob')
-        encoder_cell = tf.contrib.rnn.MultiRNNCell(
-            [create_rnn_cell() for _ in range(self.hparam.num_layers)], state_is_tuple=True)
 
         with tf.variable_scope('question'):
             self.question = tf.placeholder(tf.int32, [None, None], name='question')
@@ -89,14 +87,36 @@ class SoloModel(ModelTemplate):
             self.emb_answer = tf.nn.dropout(
                 self.emb_answer, keep_prob=self.keep_prob)
 
-        with tf.variable_scope('rnn'):
-            question_output, question_final_state = tf.nn.dynamic_rnn(
-                cell=encoder_cell, inputs=self.emb_question,
-                sequence_length=self.question_len, time_major=False, dtype=tf.float32)
+        if self.hparam.direction == 'mono':
+            with tf.variable_scope('fw_cell'):
+                fw_cell = tf.contrib.rnn.MultiRNNCell(
+                    [create_rnn_cell() for _ in range(self.hparam.num_layers)], state_is_tuple=True)
+            with tf.variable_scope('rnn'):
+                question_output, question_final_state = tf.nn.dynamic_rnn(
+                    cell=fw_cell, inputs=self.emb_question,
+                    sequence_length=self.question_len, time_major=False, dtype=tf.float32)
 
-            answer_output, answer_final_state = tf.nn.dynamic_rnn(
-                cell=encoder_cell, inputs=self.emb_answer,
-                sequence_length=self.answer_len, time_major=False, dtype=tf.float32)
+                answer_output, answer_final_state = tf.nn.dynamic_rnn(
+                    cell=fw_cell, inputs=self.emb_answer,
+                    sequence_length=self.answer_len, time_major=False, dtype=tf.float32)
+        elif self.hparam.direction == 'bi':
+            with tf.variable_scope('fw_cell'):
+                fw_cell = tf.contrib.rnn.MultiRNNCell(
+                    [create_rnn_cell() for _ in range(self.hparam.num_layers)], state_is_tuple=True)
+            with tf.variable_scope('bw_cell'):
+                bw_cell = tf.contrib.rnn.MultiRNNCell(
+                    [create_rnn_cell() for _ in range(self.hparam.num_layers)], state_is_tuple=True)
+            with tf.variable_scope('rnn'):
+                question_output, question_final_state = tf.nn.bidirectional_dynamic_rnn(
+                    cell_fw=fw_cell, cell_bw=bw_cell, inputs=self.emb_question,
+                    sequence_length=self.question_len, time_major=False, dtype=tf.float32)
+                question_final_state = question_final_state[-1]
+                answer_output, answer_final_state = tf.nn.bidirectional_dynamic_rnn(
+                    cell_fw=fw_cell, cell_bw=bw_cell, inputs=self.emb_answer,
+                    sequence_length=self.answer_len, time_major=False, dtype=tf.float32)
+                answer_final_state = answer_final_state[-1]
+        else:
+            raise ValueError()
 
         with tf.variable_scope('linear'):
             w = tf.get_variable('linear_w', [self.hparam.hidden, self.hparam.hidden],
@@ -112,12 +132,11 @@ class SoloModel(ModelTemplate):
 
         self.opt = tf.contrib.opt.LazyAdamOptimizer(learning_rate=self.hparam.learning_rate)
         grads_vars = self.opt.compute_gradients(self.mean_loss)
-        capped_grads_vars = [[tf.clip_by_value(g, -0.5, 0.5), v] for g, v in grads_vars]
+        capped_grads_vars = [[tf.clip_by_value(g, -1, 1), v] for g, v in grads_vars if g is not None]
         self.optOp = self.opt.apply_gradients(capped_grads_vars, self.global_step)
 
     def step(self, batch, is_train=True):
-        question = batch.question()
-        answer = batch.answer()
+        question, answer = batch.question_answer_pair()
         feed_dict = {self.question: question,
                      self.answer: answer,
                      self.labels: np.eye(batch.size),
@@ -136,17 +155,24 @@ class SoloModel(ModelTemplate):
         return fetches, feed_dict
 
 
-class SoloBase(object):
+class SoloBase(object):  # 4.23
     rnn_cell = 'lstm'
     hidden = 128
     keep_prob = 0.8
     num_layers = 1
     vocab_size = 2 ** 15
     emb_dim = 128
-    learning_rate = 0.005  # 4.24839
+    learning_rate = 0.005
     max_iter = 5000
     show_iter = 100
     save_iter = 500
-    batch_size = 128
+    batch_size = 256
     x_max_len = 128
     y_max_len = 32
+    direction = 'mono'
+
+
+class SoloBiBase(SoloBase):  # 4.15
+    direction = 'bi'
+    num_layers = 2
+    learning_rate = 0.003

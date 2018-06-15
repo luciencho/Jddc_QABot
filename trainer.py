@@ -15,7 +15,7 @@ import argparse
 import tensorflow as tf
 from src.data_utils import add_dir_to_hparam
 from src.op import train, build_vector
-from src.model import SoloBase, SoloModel
+from src.model import SoloBase, SoloModel, SoloBiBase
 
 
 def main():
@@ -25,10 +25,17 @@ def main():
                         help='visible gpu device')
     parser.add_argument('-m', '--memory_fraction', type=float, default=0.95,
                         help='gpu memory fraction')
+    parser.add_argument('-s', '--hparam', type=str, default='solobase',
+                        help='high parameter set')
     args = parser.parse_args()
     if args.gpu_device != '':
         os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_device
-    hparam = SoloBase()
+    if args.hparam == 'solobase':
+        hparam = SoloBase()
+    elif args.hparam == 'solobibase':
+        hparam = SoloBiBase()
+    else:
+        raise ValueError()
     hparam = add_dir_to_hparam(hparam, args.tmp_dir)
     model = SoloModel(hparam)
     config = tf.ConfigProto()

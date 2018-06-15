@@ -93,20 +93,22 @@ def load_data(path):
         return f.read().split('\n')
 
 
-def iter_batch(lines, batch_size, word2id, max_len=None):
+def iter_batch(pair, batch_size, word2id, x_max_len=None, y_max_len=None):
     start = 0
-    size = len(lines)
+    size = len(pair)
     while True:
         start = start % size
         end = start % size + batch_size
         if end > size:
-            curr = lines[start:] + lines[: end - size]
-            random.shuffle(lines)
+            curr = pair[start:] + pair[: end - size]
+            random.shuffle(pair)
         else:
-            curr = lines[start: end]
-        curr = [tokenizer(l, word2id, max_len) for l in curr]
-        assert len(curr) == batch_size
-        yield curr
+            curr = pair[start: end]
+        x, y = zip(*curr)
+        curr_x = [tokenizer(l, word2id, x_max_len) for l in x]
+        curr_y = [tokenizer(l, word2id, y_max_len) for l in y]
+        assert len(curr_x) == len(curr_y) == batch_size
+        yield curr_x, curr_y
         start += batch_size
 
 
@@ -120,16 +122,11 @@ class Batch(object):
         self.y_max_len = y_max_len
         if reverse_x:
             x = [i[:: -1] for i in x]
-        self.x = x
-        self.y = y
-        self.x_iter = iter_batch(self.x, batch_size, word2id, x_max_len)
-        self.y_iter = iter_batch(self.y, batch_size, word2id, y_max_len)
+        self.pair = list(zip(x, y))
+        self.x_y_iter = iter_batch(self.pair, batch_size, word2id, x_max_len, y_max_len)
 
-    def question(self):
-        return next(self.x_iter)
-
-    def answer(self):
-        return next(self.y_iter)
+    def question_answer_pair(self):
+        return next(self.x_y_iter)
 
 
 def cosine_similarity(v1, v2):

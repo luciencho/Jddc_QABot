@@ -25,11 +25,13 @@ class ModelTemplate(object):
     def step(self, batch, is_train):
         raise NotImplementedError()
 
+    def infer(self, question_toks):
+        raise NotImplementedError()
+
 
 class SoloModel(ModelTemplate):
     def __init__(self, hparam):
-        self.hparam = hparam
-        self.global_step = tf.Variable(0, trainable=False)
+        super(SoloModel, self).__init__(hparam)
         self.keep_prob = None
         self.question = None
         self.question_len = None
@@ -46,7 +48,6 @@ class SoloModel(ModelTemplate):
         self.optOp = None
         self.init = None
         self.body()
-        super(SoloModel, self).__init__(hparam)
 
     def body(self):
 
@@ -79,13 +80,13 @@ class SoloModel(ModelTemplate):
         with tf.variable_scope('embedding'), tf.device('/cpu:0'):
             self.embedding = tf.get_variable(
                 'embedding', [self.hparam.vocab_size, self.hparam.emb_dim],
-                initializer=tf.contrib.layers.xavier_initializer())
+                initializer=tf.contrib.layers.xavier_initializer())  # [vocab_size, emb_dim]
             self.emb_question = tf.nn.embedding_lookup(self.embedding, self.question)
             self.emb_answer = tf.nn.embedding_lookup(self.embedding, self.answer)
             self.emb_question = tf.nn.dropout(
-                self.emb_question, keep_prob=self.keep_prob)
+                self.emb_question, keep_prob=self.keep_prob)  # [batch_size, q_seq_len, emb_dim]
             self.emb_answer = tf.nn.dropout(
-                self.emb_answer, keep_prob=self.keep_prob)
+                self.emb_answer, keep_prob=self.keep_prob)  # [batch_size, a_seq_len, emb_dim]
 
         if self.hparam.direction == 'mono':
             with tf.variable_scope('fw_cell'):
@@ -158,7 +159,7 @@ class SoloModel(ModelTemplate):
 class SoloBase(object):  # 4.23
     rnn_cell = 'lstm'
     hidden = 128
-    keep_prob = 0.8
+    keep_prob = 0.85
     num_layers = 1
     vocab_size = 2 ** 15
     emb_dim = 128
@@ -174,3 +175,4 @@ class SoloBase(object):  # 4.23
 
 class SoloBiBase(SoloBase):  # 3.75
     direction = 'bi'
+    keep_prob = 0.75

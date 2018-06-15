@@ -55,8 +55,10 @@ def main():
     delta_bleu_scores = []
     if args.unit == 'char':
         fn = list
-    else:
+    elif args.unit == 'word':
         fn = sent2words
+    else:
+        raise ValueError('invalid unit: {}'.format(args.unit))
     for (r, w), h in zip(iter_answers, iter_inferences):
         r = [word for word in [fn(i) for i in r] if word != '_']
         h = [word for word in fn(h) if word != '_']

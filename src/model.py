@@ -123,11 +123,9 @@ class SoloModel(ModelTemplate):
             w = tf.get_variable('linear_w', [self.hparam.hidden, self.hparam.hidden],
                                 initializer=tf.truncated_normal_initializer())
 
-        answer_final_state = tf.matmul(answer_final_state[-1].h, w)
-        self.question_state = question_final_state
-        self.answer_state = answer_final_state
-        logits = tf.matmul(
-            question_final_state[-1].h, answer_final_state, transpose_b=True)
+        self.question_state = question_final_state[-1].h
+        self.answer_state = answer_final_state[-1].h
+        logits = tf.matmul(self.question_state, tf.matmul(self.answer_state, w), transpose_b=True)
         losses = tf.losses.softmax_cross_entropy(self.labels, logits)
         self.mean_loss = tf.reduce_mean(losses, name='mean_loss')
 
@@ -164,7 +162,7 @@ class SoloBase(object):  # 4.23
     vocab_size = 2 ** 15
     emb_dim = 128
     learning_rate = 0.005
-    max_iter = 5000
+    max_iter = 10000
     show_iter = 100
     save_iter = 500
     batch_size = 256

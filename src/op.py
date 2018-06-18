@@ -92,7 +92,7 @@ def build_vector(hparam, model, sess):
             starter = time()
         train_fetch, train_feed_dict = model.step(train_batch, is_train=False)
         q, a, lo = sess.run(train_fetch, feed_dict=train_feed_dict)
-        question_vecs.append(q[-1].h)
+        question_vecs.append(q)
         answer_vecs.append(a)
         losses.append(lo)
     question_vecs = np.reshape(np.array(question_vecs), [-1, hparam.hidden])[: total_size]
@@ -129,4 +129,4 @@ class Answer(object):
         toks = tokenizer(question, self.word2id, self.max_len)
         fetches, feed_dict = self.model.infer(toks)
         vec = self.sess.run(fetches, feed_dict=feed_dict)[0]
-        return self.get_answer_by_vec(vec[-1].h[0], num)
+        return self.get_answer_by_vec(vec, num)

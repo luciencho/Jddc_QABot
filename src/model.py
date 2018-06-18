@@ -43,6 +43,7 @@ class SoloModel(ModelTemplate):
         self.emb_answer = None
         self.question_state = None
         self.answer_state = None
+        self.show_loss = None
         self.mean_loss = None
         self.opt = None
         self.optOp = None
@@ -127,7 +128,12 @@ class SoloModel(ModelTemplate):
         self.answer_state = answer_final_state[-1].h
         logits = tf.matmul(self.question_state, tf.matmul(self.answer_state, w), transpose_b=True)
         losses = tf.losses.softmax_cross_entropy(self.labels, logits)
-        self.mean_loss = tf.reduce_mean(losses, name='mean_loss')
+        self.show_loss = tf.reduce_mean(losses, name='show_loss')
+        trainable_vars = tf.trainable_variables()
+        self.mean_loss = tf.reduce_mean(
+            losses + self.hparam.l2_weight * tf.add_n(
+                [tf.nn.l2_loss(v) for v in trainable_vars if 'bias' not in v.name]),
+            name='mean_loss')
 
         self.opt = tf.contrib.opt.LazyAdamOptimizer(learning_rate=self.hparam.learning_rate)
         grads_vars = self.opt.compute_gradients(self.mean_loss)
@@ -141,10 +147,10 @@ class SoloModel(ModelTemplate):
                      self.labels: np.eye(batch.size),
                      self.keep_prob: self.hparam.keep_prob}
         if is_train:
-            fetches = [self.optOp, self.mean_loss]
+            fetches = [self.optOp, self.show_loss]
         else:
             feed_dict[self.keep_prob] = 1.0
-            fetches = [self.question_state, self.answer_state, self.mean_loss]
+            fetches = [self.question_state, self.answer_state, self.show_loss]
         return fetches, feed_dict
 
     def infer(self, question_toks):
@@ -169,6 +175,7 @@ class SoloBase(object):  # 4.23
     x_max_len = 128
     y_max_len = 32
     direction = 'mono'
+    l2_weight = 0.0001
 
 
 class SoloBiBase(SoloBase):  # 3.75

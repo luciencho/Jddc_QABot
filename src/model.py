@@ -12,6 +12,7 @@ from __future__ import unicode_literals
 
 import numpy as np
 import tensorflow as tf
+from src.layers import rnn_attention
 
 
 class ModelTemplate(object):
@@ -112,20 +113,28 @@ class SoloModel(ModelTemplate):
                 question_output, question_final_state = tf.nn.bidirectional_dynamic_rnn(
                     cell_fw=fw_cell, cell_bw=bw_cell, inputs=self.emb_question,
                     sequence_length=self.question_len, time_major=False, dtype=tf.float32)
+                question_output = tf.concat([question_output[0], question_output[1]], axis=-1)
                 question_final_state = question_final_state[-1]
                 answer_output, answer_final_state = tf.nn.bidirectional_dynamic_rnn(
                     cell_fw=fw_cell, cell_bw=bw_cell, inputs=self.emb_answer,
                     sequence_length=self.answer_len, time_major=False, dtype=tf.float32)
+                answer_output = tf.concat([answer_output[0], answer_output[1]], axis=-1)
                 answer_final_state = answer_final_state[-1]
         else:
             raise ValueError()
 
+        if self.hparam.attention is None:
+            self.question_state = question_final_state[-1].h
+            self.answer_state = answer_final_state[-1].h
+        elif self.hparam.attention == 'self_att':
+            self.question_state = rnn_attention(question_output, self.hparam.attention_size, False)
+            self.answer_state = rnn_attention(answer_output, self.hparam.attention_size, False)
+        else:
+            raise ValueError('attention type {} is invalid'.format(self.hparam.attention))
+
         with tf.variable_scope('linear'):
             w = tf.get_variable('linear_w', [self.hparam.hidden, self.hparam.hidden],
                                 initializer=tf.truncated_normal_initializer())
-
-        self.question_state = question_final_state[-1].h
-        self.answer_state = answer_final_state[-1].h
         logits = tf.matmul(self.question_state, tf.matmul(self.answer_state, w), transpose_b=True)
         losses = tf.losses.softmax_cross_entropy(self.labels, logits)
         self.show_loss = tf.reduce_mean(losses, name='show_loss')
@@ -176,6 +185,8 @@ class SoloBase(object):  # 4.23
     y_max_len = 32
     direction = 'mono'
     l2_weight = 0.0001
+    attention = None
+    attention_size = 32
 
 
 class SoloBiBase(SoloBase):  # 3.75

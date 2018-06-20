@@ -124,6 +124,7 @@ class SoloModel(ModelTemplate):
         else:
             raise ValueError()
 
+        w_shape = [self.hparam.hidden, self.hparam.hidden]
         if self.hparam.attention is None:
             self.question_state = question_final_state[-1].h
             self.answer_state = answer_final_state[-1].h
@@ -134,13 +135,15 @@ class SoloModel(ModelTemplate):
             self.answer_state = tf.nn.dropout(rnn_attention(
                 answer_output, self.hparam.attention_size, False, 'answer_attention'),
                 self.hparam.keep_prob)
+            w_shape = [2 * self.hparam.hidden, 2 * self.hparam.hidden]
         else:
             raise ValueError('attention type {} is invalid'.format(self.hparam.attention))
 
         with tf.variable_scope('linear'):
-            w = tf.get_variable('linear_w', [2 * self.hparam.hidden, 2 * self.hparam.hidden],
-                                initializer=tf.truncated_normal_initializer())
-        logits = tf.matmul(self.question_state, tf.matmul(self.answer_state, w), transpose_b=True)
+            w = tf.get_variable(
+                'linear_w', w_shape, initializer=tf.truncated_normal_initializer())
+        logits = tf.matmul(
+            self.question_state, tf.matmul(self.answer_state, w), transpose_b=True)
         losses = tf.losses.softmax_cross_entropy(self.labels, logits)
         self.show_loss = tf.reduce_mean(losses, name='show_loss')
         trainable_vars = tf.trainable_variables()
@@ -153,7 +156,8 @@ class SoloModel(ModelTemplate):
             self.hparam.learning_rate, self.global_step, 100, self.hparam.decay_rate)
         self.opt = tf.contrib.opt.LazyAdamOptimizer(learning_rate=self.learning_rate)
         grads_vars = self.opt.compute_gradients(self.mean_loss)
-        capped_grads_vars = [[tf.clip_by_value(g, -1, 1), v] for g, v in grads_vars if g is not None]
+        capped_grads_vars = [[
+            tf.clip_by_value(g, -1, 1), v] for g, v in grads_vars if g is not None]
         self.optOp = self.opt.apply_gradients(capped_grads_vars, self.global_step)
 
     def step(self, batch, is_train=True):

@@ -187,7 +187,7 @@ class SoloBase(object):  # 4.23
     num_layers = 1
     vocab_size = 50000
     emb_dim = 128
-    learning_rate = 0.004
+    learning_rate = 0.006
     max_iter = 10000
     show_iter = 100
     save_iter = 500
@@ -198,18 +198,20 @@ class SoloBase(object):  # 4.23
     l2_weight = 0.0001
     attention = None
     attention_size = 32
-    decay_rate = 0.95
+    decay_rate = 0.99
 
 
 class SoloBiBase(SoloBase):  # 3.62
+    learning_rate = 0.005
     direction = 'bi'
     keep_prob = 0.75
-    decay_rate = 0.92
+    decay_rate = 0.97
 
 
 class SoloBiAtt(SoloBiBase):  # 3.62
-    learning_rate = 0.003
+    hidden = 64
+    learning_rate = 0.004
     keep_prob = 0.7
     attention = 'self_att'
     attention_size = 4096
-    decay_rate = 0.9
+    decay_rate = 0.95

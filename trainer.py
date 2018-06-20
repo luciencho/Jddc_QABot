@@ -15,7 +15,7 @@ import argparse
 import tensorflow as tf
 from src.data_utils import add_dir_to_hparam
 from src.op import train, build_vector
-from src.model import SoloBase, SoloModel, SoloBiBase
+from src.model import SoloBase, SoloModel, SoloBiBase, SoloBiAtt
 
 
 def main():
@@ -34,6 +34,8 @@ def main():
         hparam = SoloBase()
     elif args.hparam == 'solobibase':
         hparam = SoloBiBase()
+    elif args.hparam == 'solobiatt':
+        hparam = SoloBiAtt()
     else:
         raise ValueError()
     hparam = add_dir_to_hparam(hparam, args.tmp_dir)

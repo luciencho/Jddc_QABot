@@ -46,6 +46,7 @@ class SoloModel(ModelTemplate):
         self.answer_state = None
         self.show_loss = None
         self.mean_loss = None
+        self.learning_rate = None
         self.opt = None
         self.optOp = None
         self.init = None
@@ -127,8 +128,12 @@ class SoloModel(ModelTemplate):
             self.question_state = question_final_state[-1].h
             self.answer_state = answer_final_state[-1].h
         elif self.hparam.attention == 'self_att':
-            self.question_state = rnn_attention(question_output, self.hparam.attention_size, False)
-            self.answer_state = rnn_attention(answer_output, self.hparam.attention_size, False)
+            self.question_state = tf.nn.dropout(rnn_attention(
+                question_output, self.hparam.attention_size, False, 'question_attention'),
+                self.hparam.keep_prob)
+            self.answer_state = tf.nn.dropout(rnn_attention(
+                answer_output, self.hparam.attention_size, False, 'answer_attention'),
+                self.hparam.keep_prob)
         else:
             raise ValueError('attention type {} is invalid'.format(self.hparam.attention))
 
@@ -144,7 +149,9 @@ class SoloModel(ModelTemplate):
                 [tf.nn.l2_loss(v) for v in trainable_vars if 'bias' not in v.name]),
             name='mean_loss')
 
-        self.opt = tf.contrib.opt.LazyAdamOptimizer(learning_rate=self.hparam.learning_rate)
+        self.learning_rate = tf.train.exponential_decay(
+            self.hparam.learning_rate, self.global_step, 100, self.hparam.decay_rate)
+        self.opt = tf.contrib.opt.LazyAdamOptimizer(learning_rate=self.learning_rate)
         grads_vars = self.opt.compute_gradients(self.mean_loss)
         capped_grads_vars = [[tf.clip_by_value(g, -1, 1), v] for g, v in grads_vars if g is not None]
         self.optOp = self.opt.apply_gradients(capped_grads_vars, self.global_step)
@@ -174,9 +181,9 @@ class SoloBase(object):  # 4.23
     hidden = 128
     keep_prob = 0.85
     num_layers = 1
-    vocab_size = 2 ** 15
+    vocab_size = 50000
     emb_dim = 128
-    learning_rate = 0.005
+    learning_rate = 0.004
     max_iter = 10000
     show_iter = 100
     save_iter = 500
@@ -187,8 +194,18 @@ class SoloBase(object):  # 4.23
     l2_weight = 0.0001
     attention = None
     attention_size = 32
+    decay_rate = 0.95
 
 
-class SoloBiBase(SoloBase):  # 3.75
+class SoloBiBase(SoloBase):  # 3.62
     direction = 'bi'
     keep_prob = 0.75
+    decay_rate = 0.92
+
+
+class SoloBiAtt(SoloBiBase):  # 3.62
+    learning_rate = 0.003
+    keep_prob = 0.7
+    attention = 'self_att'
+    attention_size = 4096
+    decay_rate = 0.9

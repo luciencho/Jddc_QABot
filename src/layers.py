@@ -6,8 +6,8 @@ from __future__ import print_function
 import tensorflow as tf
 
 
-def rnn_attention(inputs, attention_size, return_alphas):
-    with tf.variable_scope('rnn_attention'):
+def rnn_attention(inputs, attention_size, return_alphas, name_scope=None):
+    with tf.variable_scope('rnn_attention' or name_scope):
         hidden_size = inputs.shape[-1].value
 
         w_omega = tf.Variable(tf.random_normal([hidden_size, attention_size], stddev=0.1))

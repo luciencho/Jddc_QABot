@@ -180,7 +180,7 @@ class SoloModel(ModelTemplate):
         return fetches, feed_dict
 
 
-class SoloBase(object):  # 4.23
+class SoloBase(object):  # 3.67
     rnn_cell = 'lstm'
     hidden = 128
     keep_prob = 0.85
@@ -201,17 +201,16 @@ class SoloBase(object):  # 4.23
     decay_rate = 0.99
 
 
-class SoloBiBase(SoloBase):  # 3.62
+class SoloBiBase(SoloBase):  # 3.57
     learning_rate = 0.005
     direction = 'bi'
     keep_prob = 0.75
     decay_rate = 0.97
 
 
-class SoloBiAtt(SoloBiBase):  # 3.62
+class SoloBiAtt(SoloBiBase):  # 3.72
     hidden = 64
-    learning_rate = 0.004
+    learning_rate = 0.006
     keep_prob = 0.7
     attention = 'self_att'
-    attention_size = 4096
-    decay_rate = 0.95
+    attention_size = 1024

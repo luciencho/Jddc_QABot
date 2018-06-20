@@ -138,7 +138,7 @@ class SoloModel(ModelTemplate):
             raise ValueError('attention type {} is invalid'.format(self.hparam.attention))
 
         with tf.variable_scope('linear'):
-            w = tf.get_variable('linear_w', [self.hparam.hidden, self.hparam.hidden],
+            w = tf.get_variable('linear_w', [2 * self.hparam.hidden, 2 * self.hparam.hidden],
                                 initializer=tf.truncated_normal_initializer())
         logits = tf.matmul(self.question_state, tf.matmul(self.answer_state, w), transpose_b=True)
         losses = tf.losses.softmax_cross_entropy(self.labels, logits)

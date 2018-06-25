@@ -12,9 +12,9 @@ from __future__ import unicode_literals
 
 import os
 import re
-import math
 import random
 import jieba_fast as jieba
+from annoy import AnnoyIndex
 
 
 def add_dir_to_hparam(hparam, tmp_dir, data_dir=None):
@@ -93,48 +93,71 @@ def load_data(path):
         return f.read().split('\n')
 
 
-def iter_batch(pair, batch_size, word2id, x_max_len=None, y_max_len=None):
-    start = 0
-    size = len(pair)
-    while True:
-        start = start % size
-        end = start % size + batch_size
-        if end > size:
-            curr = pair[start:] + pair[: end - size]
-            random.shuffle(pair)
-        else:
-            curr = pair[start: end]
-        x, y = zip(*curr)
-        curr_x = [tokenizer(l, word2id, x_max_len) for l in x]
-        curr_y = [tokenizer(l, word2id, y_max_len) for l in y]
-        assert len(curr_x) == len(curr_y) == batch_size
-        yield curr_x, curr_y
-        start += batch_size
-
-
 class Batch(object):
-    def __init__(self, batch_size, x_max_len, y_max_len,
-                 x, y, word2id, reverse_x=False):
-        assert len(x) == len(y)
-        print('data size: {}'.format(len(x)))
-        self.size = batch_size
+    def __init__(self, x, y, x_max_len, y_max_len, word2id):
+        self.x = x
+        self.y = y
+        self.size = len(x)
         self.x_max_len = x_max_len
         self.y_max_len = y_max_len
-        if reverse_x:
-            x = [i[:: -1] for i in x]
-        self.pair = list(zip(x, y))
-        self.x_y_iter = iter_batch(self.pair, batch_size, word2id, x_max_len, y_max_len)
+        self.word2id = word2id
 
-    def question_answer_pair(self):
-        return next(self.x_y_iter)
+    def shuffle_data(self):
+        pair = list(zip(self.x, self.y))
+        random.shuffle(pair)
+        x, y = zip(*pair)
+        self.x = x
+        self.y = y
+
+    def next_batch_idx(self, batch_size, idx):
+        start = idx % self.size
+        end = start % self.size + batch_size
+        if end > self.size:
+            ids = list(range(start, self.size)) + list(range(0, end - self.size))
+            flag = True
+        else:
+            ids = list(range(start, end))
+            flag = False
+        return ids, flag
+
+    def encode_by_ids(self, ids):
+        return ([tokenizer(self.x[i], self.word2id, self.x_max_len) for i in ids],
+                [tokenizer(self.x[i], self.word2id, self.y_max_len) for i in ids])
+
+    def next_batch(self, batch_size, idx):
+        ids, update_epoch = self.next_batch_idx(batch_size, idx)
+        if update_epoch:
+            self.shuffle_data()
+        x, y = self.encode_by_ids(ids)
+        return x, y, idx + batch_size, update_epoch
 
 
-def cosine_similarity(v1, v2):
-    sum_xx, sum_xy, sum_yy = 0, 0, 0
-    for i in range(len(v1)):
-        x = v1[i]
-        y = v2[i]
-        sum_xx += x * x
-        sum_yy += y * y
-        sum_xy += x * y
-    return sum_xy / math.sqrt(sum_xx * sum_yy)\
+class SimilarBatch(Batch):
+    def __init__(self, x, y, x_max_len, y_max_len, word2id, vecs, num_trees, top_n):
+        super(SimilarBatch, self).__init__(x, y, x_max_len, y_max_len, word2id)
+        self.ann = None
+        self.set_ann(x, y, vecs)
+        self.top_n = top_n
+        self.num_trees = num_trees
+
+    def set_ann(self, x, y, vectors):
+        self.x = x
+        self.y = y
+        self.ann = AnnoyIndex(vectors.shape[-1])
+        for n, v in enumerate(vectors):
+            self.ann.add_item(n, v)
+        self.ann.build(self.num_trees)
+
+    def most_similar_by_idx(self, idx):
+        return self.ann.get_nns_by_item(idx, self.top_n)
+
+    def next_batch(self, batch_size, idx):
+        if batch_size % self.top_n != 0:
+            raise ValueError('top_n {} must by a factor of batch_size {}'.format(
+                self.top_n, batch_size))
+        ids, update_epoch = self.next_batch_idx(batch_size / self.top_n, idx)
+        new_ids = []
+        for i in ids:
+            new_ids += self.most_similar_by_idx(i)
+        x, y = self.encode_by_ids(new_ids)
+        return x, y, idx + batch_size / self.top_n, update_epoch

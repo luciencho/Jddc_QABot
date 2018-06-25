@@ -160,17 +160,17 @@ class SoloModel(ModelTemplate):
             tf.clip_by_value(g, -1, 1), v] for g, v in grads_vars if g is not None]
         self.optOp = self.opt.apply_gradients(capped_grads_vars, self.global_step)
 
-    def step(self, batch, is_train=True):
-        question, answer = batch.question_answer_pair()
+    def step(self, x, y, is_train=True):
+        question, answer = x, y
         feed_dict = {self.question: question,
                      self.answer: answer,
-                     self.labels: np.eye(batch.size),
+                     self.labels: np.eye(len(x)),
                      self.keep_prob: self.hparam.keep_prob}
         if is_train:
             fetches = [self.optOp, self.show_loss]
         else:
             feed_dict[self.keep_prob] = 1.0
-            fetches = [self.question_state, self.answer_state, self.show_loss]
+            fetches = [self.question_state, self.show_loss]
         return fetches, feed_dict
 
     def infer(self, question_toks):
@@ -188,9 +188,10 @@ class SoloBase(object):  # 3.67
     vocab_size = 50000
     emb_dim = 128
     learning_rate = 0.006
-    max_iter = 10000
+    max_iter = 50000
     show_iter = 100
     save_iter = 500
+    switch_iter = [6000, 12000, 18000, 24000]
     batch_size = 256
     x_max_len = 128
     y_max_len = 32

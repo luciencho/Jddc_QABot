@@ -14,8 +14,14 @@ import os
 import argparse
 import tensorflow as tf
 from src.data_utils import add_dir_to_hparam
-from src.op import train, build_vector
-from src.model import SoloBase, SoloModel, SoloBiBase, SoloBiAtt
+import src.op as op
+import src.model as mdl
+
+
+_allowed_hparams = dict(
+    solobase=mdl.SoloBase,
+    solobibase=mdl.SoloBiBase,
+    solobiatt=mdl.SoloBiAtt)
 
 
 def main():
@@ -30,21 +36,18 @@ def main():
     args = parser.parse_args()
     if args.gpu_device != '':
         os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_device
-    if args.hparam == 'solobase':
-        hparam = SoloBase()
-    elif args.hparam == 'solobibase':
-        hparam = SoloBiBase()
-    elif args.hparam == 'solobiatt':
-        hparam = SoloBiAtt()
-    else:
-        raise ValueError()
+
+    assert args.hparam in _allowed_hparams
+    hparam = _allowed_hparams[args.hparam]
     hparam = add_dir_to_hparam(hparam, args.tmp_dir)
-    model = SoloModel(hparam)
+
+    model = mdl.SoloModel(hparam)
     config = tf.ConfigProto()
     config.gpu_options.per_process_gpu_memory_fraction = args.memory_fraction
     with tf.Session(config=config) as sess:
-        train(hparam, model, sess)
-        build_vector(hparam, model, sess)
+        op.train_shuffle(hparam, model, sess)
+        op.build_vector(hparam, model, sess)
+        op.build_annoy(hparam)
 
 
 if __name__ == '__main__':

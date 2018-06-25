@@ -14,21 +14,21 @@ from annoy import AnnoyIndex
 import tensorflow as tf
 from time import time
 import numpy as np
-from src.data_utils import load_vocab, load_data, Batch, tokenizer
+import src.data_utils
 from src.model import SoloModel
 
 
-def train(hparam, model, sess):
+def train_shuffle(hparam, model, sess):
     # loading data
-    word2id, _ = load_vocab(hparam.vocab_path)
-    train_question = load_data(hparam.train_question_path)
-    train_answer = load_data(hparam.train_answer_path)
-    train_batch = Batch(hparam.batch_size, hparam.x_max_len, hparam.y_max_len,
-                        train_question, train_answer, word2id)
-    dev_question = load_data(hparam.dev_question_path)
-    dev_answer = load_data(hparam.dev_answer_path)
-    dev_batch = Batch(hparam.batch_size, hparam.x_max_len, hparam.y_max_len,
-                      dev_question, dev_answer, word2id)
+    word2id, _ = src.data_utils.load_vocab(hparam.vocab_path)
+    train_question = src.data_utils.load_data(hparam.train_question_path)
+    train_answer = src.data_utils.load_data(hparam.train_answer_path)
+    train_batch = src.data_utils.Batch(
+        train_question, train_answer, hparam.x_max_len, hparam.y_max_len, word2id)
+    dev_question = src.data_utils.load_data(hparam.dev_question_path)
+    dev_answer = src.data_utils.load_data(hparam.dev_answer_path)
+    dev_batch = src.data_utils.Batch(
+        dev_question, dev_answer, hparam.x_max_len, hparam.y_max_len, word2id)
 
     sess.run(tf.global_variables_initializer())
     starter = time()
@@ -36,13 +36,19 @@ def train(hparam, model, sess):
     train_losses = []
     dev_losses = []
     lowest_loss = 10
+    train_id = 0
+    dev_id = 0
     for i in range(hparam.max_iter):
-        train_fetch, train_feed_dict = model.step(train_batch)
+        train_q, train_a, train_id, update_train_epoch = train_batch.next_batch(
+            hparam.batch_size, train_id)
+        train_fetch, train_feed_dict = model.step(train_q, train_a)
         _, train_loss = sess.run(train_fetch, feed_dict=train_feed_dict)
         train_losses.append(train_loss)
         if i % hparam.show_iter == 0 and i:
-            dev_fetch, dev_feed_dict = model.step(dev_batch, is_train=False)
-            _, __, dev_loss = sess.run(dev_fetch, feed_dict=dev_feed_dict)
+            dev_q, dev_a, dev_id, update_dev_epoch = dev_batch.next_batch(
+                hparam.batch_size, dev_id)
+            dev_fetch, dev_feed_dict = model.step(dev_q, dev_a, is_train=False)
+            _, dev_loss = sess.run(dev_fetch, feed_dict=dev_feed_dict)
             dev_losses.append(dev_loss)
             speed = hparam.show_iter / (time() - starter)
             print('\tstep {:05d} | train loss {:.5f} | dev loss {:.5f} | speed {:.5f} it/s'.format(
@@ -58,30 +64,25 @@ def train(hparam, model, sess):
                 i - hparam.save_iter, i, avg_train_loss, avg_dev_loss))
             train_losses = []
             dev_losses = []
+        if i in hparam.switch_iter:
+            vecs = get_vector(hparam, model, sess)
+            train_batch = src.data_utils.SimilarBatch(
+                train_question, train_answer, hparam.x_max_len, hparam.y_max_len, word2id,
+                vecs, 10, 4)
     print('lowest_loss: {:.5f}'.format(lowest_loss))
 
 
-def build_vector(hparam, model, sess):
-
-    def annoy_with_npz(num_tree=10):
-        vs = np.load(hparam.vec_path)
-        qvs = vs['question_vecs']
-        ann = AnnoyIndex(hparam.hidden)
-        for n, ii in enumerate(qvs):
-            ann.add_item(n, ii)
-        ann.build(num_tree)
-        ann.save(hparam.ann_path)
-
+def get_vector(hparam, model, sess):
     saver = tf.train.Saver()
     saver.restore(sess, hparam.model_path)
-    train_question = load_data(hparam.train_question_path)
-    train_answer = load_data(hparam.train_answer_path)
-    word2id, _ = load_vocab(hparam.vocab_path)
-    train_batch = Batch(hparam.batch_size, hparam.x_max_len, hparam.y_max_len,
-                        train_question, train_answer, word2id)
+    train_question = src.data_utils.load_data(hparam.train_question_path)
+    train_answer = src.data_utils.load_data(hparam.train_answer_path)
+    word2id, _ = src.data_utils.load_vocab(hparam.vocab_path)
+    train_id = 0
+    train_batch = src.data_utils.Batch(
+        train_question, train_answer, hparam.x_max_len, hparam.y_max_len, word2id)
     total_size = len(train_question)
     question_vecs = []
-    answer_vecs = []
     losses = []
     starter = time()
     for i in range(total_size // hparam.batch_size + (
@@ -90,17 +91,31 @@ def build_vector(hparam, model, sess):
             speed = hparam.show_iter / (time() - starter)
             print('step : {:05d} | speed: {:.5f} it/s'.format(i, speed))
             starter = time()
-        train_fetch, train_feed_dict = model.step(train_batch, is_train=False)
-        q, a, lo = sess.run(train_fetch, feed_dict=train_feed_dict)
+        train_q, train_a, train_id, update_train_epoch = train_batch.next_batch(
+            hparam.batch_size, train_id)
+        train_fetch, train_feed_dict = model.step(train_q, train_a, is_train=False)
+        q, lo = sess.run(train_fetch, feed_dict=train_feed_dict)
         question_vecs.append(q)
-        answer_vecs.append(a)
         losses.append(lo)
     question_vecs = np.reshape(np.array(question_vecs), [-1, hparam.hidden])[: total_size]
-    answer_vecs = np.reshape(np.array(answer_vecs), [-1, hparam.hidden])[: total_size]
     losses = losses[: total_size]
     print('total loss: {:.5f}'.format(sum(losses) / len(losses)))
-    np.savez(hparam.vec_path, question_vecs=question_vecs, answer_vecs=answer_vecs)
-    annoy_with_npz()
+    return question_vecs
+
+
+def build_vector(hparam, model, sess):
+    question_vecs = get_vector(hparam, model, sess)
+    np.savez(hparam.vec_path, question_vecs=question_vecs)
+
+
+def build_annoy(hparam, num_tree=10):
+    vs = np.load(hparam.vec_path)
+    qvs = vs['question_vecs']
+    ann = AnnoyIndex(hparam.hidden)
+    for n, ii in enumerate(qvs):
+        ann.add_item(n, ii)
+    ann.build(num_tree)
+    ann.save(hparam.ann_path)
 
 
 class Answer(object):
@@ -108,12 +123,12 @@ class Answer(object):
         self.ann = AnnoyIndex(hparam.hidden)
         self.ann.load(hparam.ann_path)
         self.max_len = hparam.x_max_len
-        self.answer = load_data(hparam.train_answer_path)
+        self.answer = src.data_utils.load_data(hparam.train_answer_path)
         self.model = SoloModel(hparam)
         self.sess = tf.Session()
         saver = tf.train.Saver()
         saver.restore(self.sess, hparam.model_path)
-        self.word2id, _ = load_vocab(hparam.vocab_path)
+        self.word2id, _ = src.data_utils.load_vocab(hparam.vocab_path)
 
     def get_idx_by_item(self, n, num=5):
         return self.ann.get_nns_by_item(n, num)
@@ -126,7 +141,7 @@ class Answer(object):
         return [self.answer[i] for i in idx]
 
     def get_answer_by_question(self, question, num=5):
-        toks = tokenizer(question, self.word2id, self.max_len)
+        toks = src.data_utils.tokenizer(question, self.word2id, self.max_len)
         fetches, feed_dict = self.model.infer(toks)
         vec = self.sess.run(fetches, feed_dict=feed_dict)[0]
         return self.get_answer_by_vec(vec, num)

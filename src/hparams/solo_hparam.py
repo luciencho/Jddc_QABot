@@ -27,14 +27,21 @@ def solo_base():
     hparams.attention_size = 32
     hparams.decay_rate = 0.97
     hparams.top_n = 4
+    hparams.segment = 'jieba'
     return hparams
 
 
-def solo_tail():  # 3.336, 0.191
+def solo_rnn():  # 3.336, 0.191
     hparams = solo_base()
     hparams.decay_rate = 0.98
     hparams.keep_prob = 0.7
     hparams.top_n = 16
+    return hparams
+
+
+def solo_thu():
+    hparams = solo_rnn()
+    hparams.segment = 'thulac'
     return hparams
 
 

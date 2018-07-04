@@ -24,7 +24,7 @@ def init_helper(hparam, question, answer):
 
 
 def vector(hparam, model, sess):
-    tokenizer = Tokenizer(hparam.vocab_file)
+    tokenizer = Tokenizer(hparam.vocab_file, segment=hparam.segment)
     batch = BaseBatch(
         tokenizer, init_helper(hparam, hparam.train_q, hparam.train_a))
     saver = tf.train.Saver()

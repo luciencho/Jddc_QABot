@@ -9,8 +9,9 @@ from src.utils import utils
 
 registry_hparams = dict(
     solo_base=solo_hparam.solo_base(),
-    solo_drop=solo_hparam.solo_tail(),
-    solo_cnn=solo_hparam.solo_cnn())
+    solo_drop=solo_hparam.solo_rnn(),
+    solo_cnn=solo_hparam.solo_cnn(),
+    solo_thu=solo_hparam.solo_thu())
 
 
 def merge_hparam(args):

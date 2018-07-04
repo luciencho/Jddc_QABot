@@ -11,7 +11,7 @@ from src.data_generator import vocabulary
 def process(hparam):
     utils.raise_inexistence(hparam.tmp_dir)
 
-    tokenizer = vocabulary.Tokenizer()
+    tokenizer = vocabulary.Tokenizer(segment=hparam.segment)
     all_data = []
     paths = [os.path.join(hparam.tmp_dir, 'train_q.txt'),
              os.path.join(hparam.tmp_dir, 'train_a.txt'),

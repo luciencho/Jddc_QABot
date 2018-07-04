@@ -164,7 +164,7 @@ class SubCutter(object):
 
 
 class Tokenizer(object):
-    def __init__(self, vocab_file=None):
+    def __init__(self, vocab_file=None, segment='jieba'):
         self.words_count = dict()
         if vocab_file is not None:
             self.vocab = utils.read_lines(vocab_file)
@@ -172,7 +172,7 @@ class Tokenizer(object):
                 vocab_file, self.vocab_size))
         else:
             self.vocab = []
-        self.sub_cutter = SubCutter()
+        self.sub_cutter = SubCutter(chinese_seg=segment)
         self.vocab_dict = dict()
         self.build_vocab_dict()
         self.PAD_ID = 0
@@ -187,7 +187,7 @@ class Tokenizer(object):
     def collect_vocab(self, lines):
         words_count = dict()
         for n, line in enumerate(lines, start=1):
-            if not n % 10000:
+            if not n % 10:
                 utils.verbose('processing no.{} lines'.format(n))
             tokens = self.sub_cutter.cut(line)
             for token in tokens:
@@ -204,16 +204,19 @@ class Tokenizer(object):
         words_count = sorted(words_count, key=words_count.get, reverse=True)
         return words_count
 
-    def build_vocab(self, data, vocab_size, path):
+    def _build_vocab(self, data, vocab_size):
         self.words_count = self.collect_vocab(data)
         self.vocab = copy_head + list(self.words_count)
         if len(self.vocab) > vocab_size:
             self.vocab = self.vocab[: vocab_size]
         utils.verbose('real vocab: {}, final vocab: {}'.format(
             len(self.words_count), self.vocab_size))
+        self.build_vocab_dict()
+
+    def build_vocab(self, data, vocab_size, path):
+        self._build_vocab(data, vocab_size)
         utils.write_lines(path, self.vocab)
         utils.verbose('vocab has been dumped in {}'.format(os.path.abspath(path)))
-        self.build_vocab_dict()
 
     def token_to_id(self, token):
         if token.startswith('{{') and token.endswith('}}'):

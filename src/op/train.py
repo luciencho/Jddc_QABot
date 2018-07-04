@@ -37,7 +37,7 @@ def reorder_batch(hparam, model, sess, batch):
 
 def process(hparam, model, sess):
     utils.clean_and_make_directory(hparam.model_dir)
-    tokenizer = Tokenizer(hparam.vocab_file)
+    tokenizer = Tokenizer(hparam.vocab_file, segment=hparam.segment)
     train_batch = BaseBatch(
         tokenizer, init_helper(hparam, hparam.train_q, hparam.train_a))
     dev_batch = BaseBatch(

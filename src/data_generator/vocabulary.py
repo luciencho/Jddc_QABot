@@ -12,7 +12,7 @@ import thulac
 from src.utils import utils
 
 jieba.initialize()
-thu = thulac.thulac()
+thu = thulac.thulac(seg_only=True)
 
 
 PAD, UNK, EOS = copy_head = ['<pad>', '<unk>', '<eos>']

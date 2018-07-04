@@ -3,7 +3,41 @@ from __future__ import unicode_literals
 from __future__ import division
 from __future__ import print_function
 
+
 import tensorflow as tf
+
+
+_allowed_rnn_type = dict(
+    lstm=tf.contrib.rnn.LSTMCell,
+    gru=tf.contrib.rnn.GRUCell,
+    rnn=tf.contrib.rnn.RNNCell)
+
+
+def rnn_cell(hidden, num_layers=1, rnn_type='lstm', dropout=0.8, scope=None):
+
+    def create_rnn_cell():
+        cell = _allowed_rnn_type.get(rnn_type.lower(), 'rnn')(hidden, reuse=reuse)
+        return tf.contrib.rnn.DropoutWrapper(cell, dropout)
+
+    with tf.variable_scope(scope or 'rnn'):
+        reuse = None if not tf.get_variable_scope().reuse else True
+        return tf.contrib.rnn.MultiRNNCell(
+            [create_rnn_cell() for _ in range(num_layers)], state_is_tuple=True)
+
+
+def bidirectional_rnn(inputs, seq_lens, hidden, num_layers=1,
+                      rnn_type='lstm', dropout=0.8, scope=None):
+    with tf.variable_scope(scope or 'bd_rnn'):
+        fw_cell = rnn_cell(hidden, num_layers, rnn_type, dropout, 'fw_cell')
+        bw_cell = rnn_cell(hidden, num_layers, rnn_type, dropout, 'bw_cell')
+        outputs, states = tf.nn.bidirectional_dynamic_rnn(
+            fw_cell, bw_cell, inputs, seq_lens)
+        return tf.concat(outputs, axis=-1), states[-1]
+
+
+def length_last_axis(tensor):
+    return tf.cast(
+        tf.reduce_sum(tf.sign(tensor), axis=-1), dtype=tf.int32)
 
 
 def rnn_attention(inputs, attention_size, return_alphas, name_scope=None):

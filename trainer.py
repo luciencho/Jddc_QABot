@@ -1,54 +1,41 @@
-# -*- coding: utf-8 -*-
-# @Time    : 6/12/18 23:58
-# @Author  : Lucien Cho
-# @File    : trainer.py
-# @Software: PyCharm
-# @Contact : luciencho@aliyun.com
-
-from __future__ import print_function
-from __future__ import absolute_import
-from __future__ import division
+# coding:utf-8
 from __future__ import unicode_literals
+from __future__ import division
+from __future__ import print_function
 
 import os
 import argparse
-import tensorflow as tf
-from src.data_utils import add_dir_to_hparam
-import src.op as op
-import src.model as mdl
+
+from src import op, hparams
 
 
-_allowed_hparams = dict(
-    solobase=mdl.SoloBase,
-    solobibase=mdl.SoloBiBase,
-    solobiatt=mdl.SoloBiAtt)
-
-
-def main():
+def parser_args(args=None):
     parser = argparse.ArgumentParser()
-    parser.add_argument('-t', '--tmp_dir', type=str, help='temporary directory')
-    parser.add_argument('-g', '--gpu_device', type=str, default='',
-                        help='visible gpu device')
-    parser.add_argument('-m', '--memory_fraction', type=float, default=0.95,
-                        help='gpu memory fraction')
-    parser.add_argument('-s', '--hparam', type=str, default='solobase',
+    parser.add_argument('--tmp_dir', type=str,
+                        help='temporary directory')
+    parser.add_argument('--problem', type=str,
+                        help='problems split by comma')
+    parser.add_argument('--model', type=str,
+                        help='model')
+    parser.add_argument('--model_dir', type=str,
+                        help='model directory')
+    parser.add_argument('--hparam_set', type=str,
                         help='high parameter set')
-    args = parser.parse_args()
-    if args.gpu_device != '':
-        os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_device
-
-    assert args.hparam in _allowed_hparams
-    hparam = _allowed_hparams[args.hparam]
-    hparam = add_dir_to_hparam(hparam, args.tmp_dir)
-
-    model = mdl.SoloModel(hparam)
-    config = tf.ConfigProto()
-    config.gpu_options.per_process_gpu_memory_fraction = args.memory_fraction
-    with tf.Session(config=config) as sess:
-        op.train_shuffle(hparam, model, sess)
-        op.build_vector(hparam, model, sess)
-        op.build_annoy(hparam)
+    parser.add_argument('--gpu_device', type=str,
+                        help='visible gpu devices')
+    parser.add_argument('--gpu_memory', type=float, default=0.23,
+                        help='gpu memory fraction')
+    args = parser.parse_args(args)
+    args = hparams.merge_hparam(args)
+    args.vocab_file = os.path.join(args.tmp_dir, '{}.vcb'.format(args.vocab_size))
+    args.train_q = os.path.join(args.tmp_dir, 'train_q.txt')
+    args.train_a = os.path.join(args.tmp_dir, 'train_a.txt')
+    args.dev_q = os.path.join(args.tmp_dir, 'dev_q.txt')
+    args.dev_a = os.path.join(args.tmp_dir, 'dev_a.txt')
+    args.ann_path = os.path.join(args.model_dir, 'vecs.ann')
+    args.model_path = os.path.join(args.model_dir, 'model')
+    return args
 
 
 if __name__ == '__main__':
-    main()
+    op.main(parser_args())
